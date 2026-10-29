@@ -1,0 +1,14 @@
+.impact-limit-row { display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:13px;color:#aaa;font-size:10px; }
+.impact-limit-row > div { display:flex;align-items:center;gap:6px; }
+.impact-limit-row input { width:67px;background:#090909;border:1px solid #343434;padding:6px;text-align:right; }
+.trade-risk-panel { border:1px solid #34312a;background:#11110e;padding:11px;margin:12px 0;font-size:10px;scroll-margin-top:88px; }
+.trade-risk-panel.blocked { border-color:#71444b; }
+.trade-risk-panel.warning,.trade-risk-panel.unknown { border-color:#6d5b2b; }
+.trade-risk-title { color:#dac67d;display:block;font-size:11px;margin-bottom:9px; }
+.trade-risk-panel.blocked .trade-risk-title { color:var(--red); }
+.trade-risk-grid,.trade-timings { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:7px 12px;margin:0;font-size:9px;line-height:1.8; }
+.trade-risk-grid dt,.trade-timings dt { color:#858585; }
+.trade-risk-grid dd,.trade-timings dd { margin:0;text-align:right;color:#d3d3c9;overflow-wrap:anywhere;font-variant-numeric:tabular-nums; }
+.trade-risk-note { color:#a89d7c;font-size:9px;line-height:1.8;margin-top:8px;overflow-wrap:anywhere; }
+.trade-wait-status { color:#e4cb78;font-size:10px;line-height:1.8;margin:10px 0; }
+.trade-timings { margin:9px 0 13px;padding:9px 0;border-top:1px solid #2e2c24; }

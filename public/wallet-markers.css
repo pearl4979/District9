@@ -1,0 +1,29 @@
+.chart-wallet-toggle { display:inline-flex; align-items:center; gap:5px; padding:4px 6px; color:#aaa; font-size:10px; white-space:nowrap; cursor:pointer; }
+.chart-wallet-toggle input { margin:0; accent-color:#d9b84e; width:13px; height:13px; }
+.wallet-chart-markers { position:absolute; left:10px; right:10px; top:0; bottom:0; pointer-events:none; overflow:hidden; }
+.wallet-chart-marker { position:absolute; box-sizing:border-box; display:flex; align-items:center; justify-content:center; width:12px; height:12px; padding:0; transform:translate(-50%,-50%); border:2px solid #8e8e8e; border-radius:50%; color:#ddd; background:#161616; font:600 6px system-ui,sans-serif; line-height:1; pointer-events:auto; cursor:pointer; z-index:2; }
+.wallet-chart-marker.buy { border-color:#00d395; }
+.wallet-chart-marker.sell { border-color:#ff405b; }
+.wallet-chart-marker.transfer { border-color:#8e8e8e; }
+.wallet-chart-marker img { width:100%; height:100%; border-radius:50%; object-fit:cover; }
+.wallet-default-avatar { display:block; width:100%; height:100%; border-radius:50%; overflow:hidden; flex:none; }
+.wallet-chart-marker:hover,.wallet-chart-marker:focus-visible { z-index:3; }
+.wallet-chart-marker.wallet-marker-overflow { border-color:#d9b84e; border-radius:3px; color:#d9b84e; font-size:7px; }
+.wallet-chart-marker:focus-visible { outline:2px solid #d9b84e; outline-offset:3px; }
+.wallet-marker-details { padding:10px 14px; border-top:1px solid #303030; color:#aaa; background:#121212; font-size:10px; overflow-wrap:anywhere; }
+.wallet-marker-details p { margin:5px 0; line-height:1.7; }
+.wallet-marker-details a { color:#d9b84e; }
+.wallet-marker-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.wallet-marker-heading strong { color:#ddd; font-weight:500; }
+.wallet-marker-heading button { padding:3px 6px; border:0; color:#999; background:transparent; cursor:pointer; font-size:10px; }
+.wallet-marker-status { padding:8px 14px; margin:0; color:#d9b84e; font-size:10px; border-top:1px solid #303030; line-height:1.7; }
+.wallet-marker-hover { position:fixed; z-index:1200; box-sizing:border-box; width:min(300px,calc(100vw - 16px)); padding:10px 12px; border:1px solid #444; border-radius:5px; background:#171717; color:#c3c3c3; font:11px/1.6 system-ui,sans-serif; overflow:hidden; overflow-wrap:anywhere; pointer-events:none; }
+.wallet-marker-hover[hidden] { display:none; }
+.wallet-hover-heading { display:block; color:#eee; font-size:12px; font-weight:600; }
+.wallet-marker-hover p { margin:3px 0; }
+.wallet-hover-hint { color:#888; font-size:9px; }
+.wallet-hover-event { padding-top:7px; margin-top:7px; border-top:1px solid #303030; }
+.wallet-hover-event > strong { color:#aaa; font-size:11px; font-weight:600; }
+.wallet-hover-event.buy > strong { color:#41d69b; }
+.wallet-hover-event.sell > strong { color:#f58491; }
+@media(max-width:520px) { .chart-wallet-toggle { font-size:9px; padding:4px; } }

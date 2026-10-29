@@ -1,0 +1,105 @@
+{
+  "chainId": 56,
+  "verifiedAt": "2026-10-27T06:39:20.545Z",
+  "verifiedBlock": 130042932,
+  "wrappedNative": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+  "gang": {
+    "pads": {
+      "v2": {
+        "address": "0x1B8F3f69DFa0a7F63d308C7EB0Fd38D8b099966E",
+        "codeHash": "0x62293eb8930fd95758c2bbd335f4b90499002edb46f382623e09402c8ad25df6",
+        "count": "228",
+        "agentGateEnabled": "true",
+        "walletCapEnabled": "true",
+        "PROTOCOL_FEE_BPS": "100"
+      },
+      "soft": {
+        "address": "0x4E6f13c8A453c1b8b4E20b590082bb233a5b80d7",
+        "codeHash": "0xdda9ff5f94f8c6e8ffffcc4debe385556502bfa2ab695b86842eeda93e9fbc4b",
+        "count": "0",
+        "agentGateEnabled": null,
+        "walletCapEnabled": null,
+        "PROTOCOL_FEE_BPS": null
+      },
+      "u": {
+        "address": "0xF81C4E51c48466c6025B0165b1Ea0F6978c712cb",
+        "codeHash": "0xb12437780fec6b00eb5dbd8254f9ec4e05c12af1d27e91a34a32cd8e1f6359ac",
+        "count": "11",
+        "agentGateEnabled": "true",
+        "walletCapEnabled": "true",
+        "PROTOCOL_FEE_BPS": "100"
+      },
+      "s": {
+        "address": "0x60aee38576035E757deD30fF8db8A8DA476430C1",
+        "codeHash": "0xa2e10ec796fbdd4640d473b5f6b674a635f5398c3069c9ef70b891d1e60022b3",
+        "count": "2",
+        "agentGateEnabled": "true",
+        "walletCapEnabled": "true",
+        "PROTOCOL_FEE_BPS": null
+      }
+    },
+    "api": "https://gang.fun/api",
+    "repository": "https://github.com/gangfun/gang-launchpad",
+    "merged": {
+      "pad": "0x15CFD2dc8278Fb87a1783ef42111618E20874365",
+      "codeHash": "0xe052484fe5a9b1da61131388848051aa84d33b971dc2db689a56be08c1d594f0",
+      "factory": "0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73",
+      "verifiedBlock": 130121803,
+      "sourceCommit": "9aeeea323721c6e270daa5d56513d55fd5fb2f21",
+      "router": "0xE040445690Aa56C8b68B7f7038C7b2562B5079C4",
+      "routerCodeHash": "0xc62bec9f3d75e3bcef245a93bb37bc2efeeea8a0ca1c31dcc506f0d21ac9246e",
+      "implementation": "0x385bab8c3040c6b41251897AC1D6622e61601c58",
+      "implementationCodeHash": "0x1fe7a1f346a949e59478c956b27358b01bfbbf6c374bb0f09d782d919d946074",
+      "handler": "0x6D8d3dE459629cBb7b552169a55D754db60cAe0c",
+      "handlerCodeHash": "0x08d8e693324a197cfbc502fbec3c3c76e44782893fdcf8df511fc5596bef7c1d",
+      "pancakeRouter": "0x10ED43C718714eb63d5aA57B78B54704E256024E",
+      "pancakeCodeHash": "0x69aef35de7236f9ae83edadff736f01ea40edd8919b2e73d87dea5d3255b8c3e",
+      "tradingVerifiedBlock": 130167693
+    }
+  },
+  "flap": {
+    "factory": "0xC55820f24015bE7c4f18949D9e1363A3609B300e",
+    "reader": "0x18Aa6C93f1887a243fdc348C9A77F5136555174a",
+    "portal": "0x49387D2E6cbF8FefE856e3FBc3E98a01aC3af062",
+    "flapPortal": "0xe2cE6ab80874Fa9Fa2aAE65D277Dd6B8e65C9De0",
+    "marketBeacon": {
+      "address": "0xe6af4e69982821A48D2e759991B96f14Fbbc9a1F",
+      "implementation": "0xBEA6346198D5e65DdB1d063f854Dd234E05b1B22",
+      "codeHash": "0xc6cbe06109800c2ee531b8ae873875c38ed354e9832708f231e4102ced0ba07a"
+    },
+    "probeBeacon": {
+      "address": "0x8E6F34B590E825AeEb352aBc69e16051C4D28c00",
+      "implementation": "0x09970C5b517e586c2E10151ec477c770D7307B99",
+      "codeHash": "0xd072c932bea820fe9f711bbec0235d9722584b209d50026569d571b8825f18a3"
+    },
+    "source": "https://flap.sh/apps/agent-bonding-curve?lang=zh",
+    "artifact": "vaultui_agent-bonding-curve_01M5FK4RKTKXQ8GDT8ZMZMAYVD",
+    "quoteAssets": [
+      {
+        "address": "0x0000000000000000000000000000000000000000",
+        "symbol": "BNB",
+        "decimals": 18
+      },
+      {
+        "address": "0x02Fca66C1D1aFB4E2A7884261eB00F63598a7436",
+        "symbol": "NVDAB",
+        "decimals": 18
+      },
+      {
+        "address": "0x205812CdBed920aFf76C6580abD681a46D11efc7",
+        "symbol": "QQQB",
+        "decimals": 18
+      },
+      {
+        "address": "0xbe9D156892E55e7154BcD3cB0FEA677F9D3103E1",
+        "symbol": "SPCXB",
+        "decimals": 18
+      },
+      {
+        "address": "0x4902C5ebc598265Ed2212b559B042De8a5Eeec3f",
+        "symbol": "BNCB",
+        "decimals": 18
+      }
+    ]
+  }
+}

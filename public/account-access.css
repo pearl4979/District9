@@ -1,0 +1,20 @@
+.account-modal[hidden], .account-modal [hidden], #account-open[hidden] { display: none !important; }
+.account-modal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 20px; background: #000b; }
+.account-card { width: min(100%,400px); max-height: 90dvh; overflow: auto; background: var(--panel,#101010); border: 1px solid var(--border,#303030); border-radius: 10px; padding: 24px; }
+.account-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
+.account-heading h2 { margin: 0; font-size: 21px; }
+.account-description { color: var(--muted,#969696); font-size: 12px; line-height: 1.65; margin: 0 0 22px; }
+.account-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+.account-tabs button { flex: 1; background: transparent; color: var(--muted,#969696); border: 1px solid var(--border,#303030); padding: 9px; border-radius: 5px; cursor: pointer; }
+.account-tabs button[aria-pressed=true] { border-color: var(--accent,#e1b85c); color: var(--accent,#e1b85c); }
+.account-form { display: flex; flex-direction: column; gap: 8px; }
+.account-form label { font-size: 12px; margin-top: 6px; }
+.account-form input { width: 100%; box-sizing: border-box; color: var(--text,#eee); background: #080808; border: 1px solid var(--border,#303030); border-radius: 5px; padding: 12px; font: inherit; font-size: 13px; }
+.account-form .button { margin-top: 12px; }
+.account-footnote { color: var(--muted,#969696); font-size: 11px; line-height: 1.65; margin: 18px 0 0; }
+.account-error { color: #ff8e91; font-size: 12px; line-height: 1.6; margin: 16px 0 0; }
+.account-identity { font-size: 14px; margin: 22px 0; overflow-wrap: anywhere; }
+.account-pairing { display:flex; flex-direction:column; gap:12px; color:var(--muted,#969696); font-size:12px; line-height:1.7; }
+.account-wallet-code { padding:12px; border:1px solid var(--border,#303030); color:var(--accent,#e1b85c); text-align:center; font-size:18px; letter-spacing:2px; }
+.account-identity { white-space:pre-line; line-height:1.7; }
+@media(max-width:520px) { .topbar-right { flex-wrap: wrap; justify-content: flex-end; gap: 6px; } .topbar-right .chain-badge { display: none; } .workspace-layout .topbar { padding-bottom: 4px; } .account-card { padding: 20px; } }
