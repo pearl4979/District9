@@ -140,7 +140,7 @@ export function createRouteOrders({protocol,baw,orders,persist,walletContext,ass
       for(const order of orders().filter(o=>o.kind==='route'&&(!readOnly||o.id===reconcileOrderId))){
         if(readOnly&&order.status==='ROUTE_RUNNING')pause(order,'只读核对已暂停后续步骤；不会自动续单');
         const step=currentStep(order);
-        if(!step)continue;
+        if(!step){if(readOnly&&order.steps.length&&order.steps.every(s=>s.status==='CONFIRMED')&&!order.routeState?.haltReason){order.status='CONFIRMED';delete order.error;order.blocksNewOrders=false;order.message='整条路线各步骤均已核对确认；未重新发送交易';changed=true;}continue;}
         if(step.status==='WAITING_APPROVAL'){
           if(order.status!=='ROUTE_RUNNING')continue;
           try{

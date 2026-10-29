@@ -2,6 +2,7 @@ import {readFileSync} from 'node:fs';
 import {Interface,ZeroAddress,formatUnits,parseUnits} from 'ethers';
 import {ERC20,readContract,check,same,getJson} from './market-utils.mjs';
 import {verifiedQuoteAsset} from './quote-asset-policy.mjs';
+import {verifyNativeProceeds} from './native-proceeds.mjs';
 const cfg=JSON.parse(readFileSync(new URL('../config/platforms.json',import.meta.url)));
 export const NATIVE='0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',USDT='0x55d398326f99059ff775485246999027b3197955';
 const WBNB=cfg.wrappedNative,ONE=10n**18n,transfer=new Interface(['event Transfer(address indexed from,address indexed to,uint256 value)']);
@@ -155,15 +156,15 @@ export function createAggregatorProtocol({protocol,baw,snapshot,provider=protoco
   let spentRaw=null;
   if((s.kind==='market'||ownedAssets[spends.toLowerCase()])&&!same(spends,NATIVE)){let spent=0n;for(const log of receipt.logs||[]){if(!same(log.address,spends))continue;try{const e=transfer.parseLog(log);if(same(e.args.from,p.walletAddress))spent+=e.args.value;if(same(e.args.to,p.walletAddress))spent-=e.args.value;}catch{}}const cap=s.kind==='market'?BigInt(s.marketInput.fromRaw):BigInt(ownedAssets[spends.toLowerCase()]);check(spent>0n&&spent<=cap,'支出回执超出原输入额度或无法核验');spentRaw=spent;}
   const ledger=p.targetPositionLedger&&s.role==='target'&&p.input.side==='buy';
-  let net=0n;const nowBalance=ledger?BigInt((await protocol.positions(p.input.token,p.walletAddress,{platformId:p.input.platformId})).balance):BigInt(await balance(receives,p.walletAddress));
+  let net=0n,nativeGasAdjustment=0n;const nowBalance=ledger?BigInt((await protocol.positions(p.input.token,p.walletAddress,{platformId:p.input.platformId})).balance):BigInt(await balance(receives,p.walletAddress));
   if(ledger){const minimum=BigInt(s.summary.minimumOutputRaw);check(minimum>0n&&nowBalance-BigInt(s.beforePositionRaw)>=minimum,'确认回执与持仓账本尚未证明最低份额到账');net=minimum;}
   else
   if(same(receives,NATIVE)){
    check(s.marketRecord?.status==='FINISHED','币安尚未确认实际到账');net=fromDisplay(s.marketRecord.toTokenActualQty,18,s.marketInput.toScale);
-   const fee=BigInt(receipt.gasUsed||0)*BigInt(receipt.gasPrice||0);check(nowBalance+fee>=BigInt(s.beforeTo)+net,'BNB 余额变化不支持聚合订单实际到账');
+   const proof=await verifyNativeProceeds({provider,step:s,receipt,walletAddress:p.walletAddress,nowBalance,expectedRaw:net});nativeGasAdjustment=proof.gasAdjustmentRaw;s.nativeProceedsEvidence={swapGasRaw:String(BigInt(receipt.gasUsed||0)*BigInt(receipt.gasPrice||0)),auxiliaryGasRaw:String(proof.auxiliaryGasRaw),approvals:proof.approvals,...(proof.anchorBlock!==undefined?{anchorBlock:proof.anchorBlock}:{})};
   }else for(const log of receipt.logs||[]){if(!same(log.address,receives))continue;try{const e=transfer.parseLog(log);if(same(e.args.to,p.walletAddress))net+=e.args.value;if(same(e.args.from,p.walletAddress))net-=e.args.value;}catch{}}
   check(net>0n,'回执未证明本路线资产实际到账');
-  const baseline=BigInt(ledger?s.beforePositionRaw:s.kind==='market'?s.beforeTo:p.input.side==='sell'?s.beforeTo:p.protectedBalances[receives.toLowerCase()]||0);const gasAdjustment=same(receives,NATIVE)?BigInt(receipt.gasUsed||0)*BigInt(receipt.gasPrice||0):0n;check(nowBalance+gasAdjustment>=baseline+net,'本路线到账已被花费或余额不足');
+  const baseline=BigInt(ledger?s.beforePositionRaw:s.kind==='market'?s.beforeTo:p.input.side==='sell'?s.beforeTo:p.protectedBalances[receives.toLowerCase()]||0);const gasAdjustment=same(receives,NATIVE)?nativeGasAdjustment:0n;check(nowBalance+gasAdjustment>=baseline+net,'本路线到账已被花费或余额不足');
   ownedAssets[receives.toLowerCase()]=String(BigInt(ownedAssets[receives.toLowerCase()]||0)+net);if(ownedAssets[spends.toLowerCase()]){const remainder=BigInt(ownedAssets[spends.toLowerCase()])-(spentRaw??BigInt(ownedAssets[spends.toLowerCase()]));check(remainder>=0n,'路线动用了原持有资产');ownedAssets[spends.toLowerCase()]=String(remainder);}
   if(s.kind==='market'&&net<BigInt(s.summary.minimumOutputRaw))haltReason='聚合实际到账低于原步骤估计最低输出，后续暂停';
   if(s.marketRecord?.refund?.length)haltReason='聚合返回退款或部分成交，请核对余额后重新下单';

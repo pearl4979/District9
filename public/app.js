@@ -1269,6 +1269,7 @@
     renderOrderWait();
     $('orders-empty').hidden = state.orders.length > 0;
     $('order-count').textContent = String(state.orders.length);
+    conversionView?.update();
     if (activeId && $(activeId)) {
       $(activeId).focus({ preventScroll: true });
       if (selection) $(activeId).setSelectionRange(...selection);
