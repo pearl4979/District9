@@ -8,6 +8,12 @@ import {verifiedAllowanceChanges,verifiedApprovalChanges} from './allowance-cons
 const erc = new Interface(ERC20);
 const hash = value => /^0x[0-9a-fA-F]{64}$/.test(value||'');
 const pending = new Set(['SUBMITTING','UNKNOWN','PENDING_CONFIRMATION','BROADCASTED','MINED','MARKET_PENDING','WAITING_APPROVAL']);
+function matchesMarketSlippage(value,bps){
+  // market-order list returns a percentage ("0.2500" = 25 bps).
+  // market-order quote uses a fraction; the two endpoints have different units.
+  if(!['string','number'].includes(typeof value)||!/^\d+(\.\d{1,6})?$/.test(String(value))||!Number.isInteger(bps))return false;
+  try{return parseUnits(String(value),6)===BigInt(bps)*10000n;}catch{return false;}
+}
 export const isBlockingRouteOrder = order => order.kind==='route' && (order.status==='ROUTE_RUNNING' || order.steps?.some(step=>pending.has(step.status))); 
 
 // Opaque allowance changes cannot establish an amount. Only direct canonical
@@ -126,11 +132,13 @@ export function createRouteOrders({protocol,baw,orders,persist,walletContext,ass
     const order={id:randomUUID(),intentId,intentKey,executionVersion,kind:'route',side:plan.input.side,token:plan.input.token,platformId:plan.input.platformId,amount:plan.input.amount,quoteSymbol:plan.summary.quoteSymbol||'BNB',walletAddress:plan.walletAddress,transaction:{from:plan.walletAddress},status:'ROUTE_RUNNING',blocksNewOrders:true,createdAt:new Date(now()).toISOString(),demo:false,route:plan,steps:plan.steps.map((s,i)=>({...s,...(i===0?{status:'WAITING_APPROVAL'}:{})})),routeState:{ownedQuoteRaw:'0',bridgeConfirmed:false,targetConfirmed:false},retainedBalances:[],txHash:null};
     orders().unshift(order);persist();onChange();return{...snapshotResult(order),queued:true};
   }
-  async function refresh() {
-    if(busy||!pendingCount())return{pending:pendingCount(),errors:0,changed:false};busy=true;
+  async function refresh({reconcileOrderId}={}) {
+    const readOnly=typeof reconcileOrderId==='string';
+    if(busy||!pendingCount()&&!readOnly)return{pending:pendingCount(),errors:0,changed:false};busy=true;
     let errors=0,changed=false;
     try{
-      for(const order of orders().filter(o=>o.kind==='route')){
+      for(const order of orders().filter(o=>o.kind==='route'&&(!readOnly||o.id===reconcileOrderId))){
+        if(readOnly&&order.status==='ROUTE_RUNNING')pause(order,'只读核对已暂停后续步骤；不会自动续单');
         const step=currentStep(order);
         if(!step)continue;
         if(step.status==='WAITING_APPROVAL'){
@@ -142,17 +150,17 @@ export function createRouteOrders({protocol,baw,orders,persist,walletContext,ass
           }catch(error){step.status='STOPPED';pause(order,error,'ROUTE_FAILED');changed=true;}
           continue;
         }
-        if(step.kind==='market'&&step.status==='MARKET_PENDING'){
-          if(now()-(step.lastOrderCheckAt||0)<2000)continue;step.lastOrderCheckAt=now();
+        if(step.kind==='market'&&(step.status==='MARKET_PENDING'||readOnly&&step.status==='UNKNOWN'&&typeof step.orderId==='string')){
+          if(!readOnly&&now()-(step.lastOrderCheckAt||0)<2000)continue;step.lastOrderCheckAt=now();
           try{
             const record=await baw.marketOrder(step.orderId,{walletAddress:order.walletAddress});if(!record||record.status==='PENDING')continue;
             const q=step.marketInput;
             const sameQuantity=(a,b)=>{try{return parseUnits(a,18)===parseUnits(b,18);}catch{return false;}};
-            if(record.orderId!==step.orderId||String(record.chain)!=='56'||!same(record.fromToken,q.fromToken)||!same(record.toToken,q.toToken)||!sameQuantity(record.fromTokenQty,q.amount)||!Number.isFinite(Number(record.slippage))||Math.abs(Number(record.slippage)-q.slippageBps/10000)>1e-9){step.status='UNKNOWN';pause(order,'聚合订单身份、交易币种、数量或滑点不匹配','UNKNOWN');changed=true;continue;}
+            if(record.orderId!==step.orderId||String(record.chain)!=='56'||!same(record.fromToken,q.fromToken)||!same(record.toToken,q.toToken)||!sameQuantity(record.fromTokenQty,q.amount)||!matchesMarketSlippage(record.slippage,q.slippageBps)){step.status='UNKNOWN';pause(order,'聚合订单身份、交易币种、数量或滑点不匹配','UNKNOWN');changed=true;continue;}
             step.marketRecord=record;
             if(record.status==='FAILED'&&!record.txHash){step.status='STOPPED';pause(order,'币安聚合订单失败；核对钱包余额和退款后重新下单','ROUTE_FAILED');changed=true;continue;}
             if(record.status!=='FINISHED'||!hash(record.txHash)||!/^\d+(\.\d+)?$/.test(record.toTokenActualQty||'')||!/[1-9]/.test(record.toTokenActualQty)){step.status='UNKNOWN';pause(order,'聚合未给出可核验实际到账或完整成交状态','UNKNOWN');changed=true;continue;}
-            step.txHash=record.txHash;step.status='BROADCASTED';changed=true;
+            step.txHash=record.txHash;step.status='BROADCASTED';if(readOnly)order.reconcileReadOnly=true;changed=true;
           }catch(error){errors++;step.error='聚合状态查询失败：'+error.message;continue;}
         }
         if(!hash(step.txHash)||!['BROADCASTED','MINED'].includes(step.status))continue;
@@ -177,17 +185,23 @@ export function createRouteOrders({protocol,baw,orders,persist,walletContext,ass
           const {head}=proof;
           step.confirmations=head-receipt.blockNumber+1;step.receiptStatus=receipt.status;step.receiptBlock=receipt.blockNumber;step.status='MINED';changed=true;
           if(step.confirmations<3)continue;
-          step.status=receipt.status===1?'CONFIRMED':'REVERTED';step.confirmedAt=new Date(now()).toISOString();
-          if(receipt.status!==1){pause(order,'路线步骤链上回滚；后续步骤未发送','ROUTE_FAILED');continue;}
+          if(receipt.status!==1){step.status='REVERTED';step.confirmedAt=new Date(now()).toISOString();pause(order,'路线步骤链上回滚；后续步骤未发送','ROUTE_FAILED');continue;}
           try{
             const observed=await protocol.observeRouteStep(order.route,step,receipt,order.routeState);
             Object.assign(order.routeState,observed);order.retainedBalances=observed.retainedBalances;
+            step.status='CONFIRMED';step.confirmedAt=new Date(now()).toISOString();
             if(observed.haltReason){pause(order,observed.haltReason);continue;}
             if(step.kind!=='approve')order.routeState[step.role==='bridge'?'bridgeConfirmed':'targetConfirmed']=true;
           }catch(error){pause(order,error);continue;}
+          if(readOnly||order.reconcileReadOnly){
+            delete step.error;
+            if(order.steps.every(s=>s.status==='CONFIRMED')){order.status='CONFIRMED';order.confirmedAt=new Date(now()).toISOString();delete order.error;order.message='整条路线各步骤均已核对确认；未重新发送交易';}
+            else pause(order,'已核对该步骤实际到账；后续步骤未执行，请使用留存资产重新报价，不会自动续单');
+            order.reconciledAt=new Date(now()).toISOString();
+          }
           order.blocksNewOrders=isBlockingRouteOrder(order);
           persist(); // Receipt/proceeds are durable before the dependent step.
-          if(order.status==='ROUTE_RUNNING')await advance(order);
+          if(order.status==='ROUTE_RUNNING'&&!readOnly&&!order.reconcileReadOnly)await advance(order);
         }catch(error){errors++;order.error='路线回执查询失败：'+error.message;}
       }
       persist();

@@ -85,6 +85,7 @@
   for(const control of [quickEnable,quickBuy,quickQuote,quickSell])control.addEventListener('change',()=>{try{window.localStorage?.setItem('district9.quick-orders',JSON.stringify({buy:quickBuy.value,sell:quickSell.value,quote:quickQuote.value,enabled:quickEnable.checked}));}catch{}renderTokens();});
   const approvalsView=window.createTradeApprovals?.({api,getOwner:()=>state.wallet?.address?.toLowerCase(),isLive:()=>state.session?.mode==='live'&&executionRequested()});
   const rpcSettingsView=window.createRpcSettingsView?.({api,getOwner:()=>state.session?.capabilities?.hosted?state.session.account?.walletAddress:state.session?'local':null,getBusy:()=>state.previewBusy||state.executeBusy,onSwitch:()=>{tradePreparation?.cancel();invalidatePreview();renderControls();}});
+  const conversionView=window.createAssetConversionView?.({api,getContext:()=>({address:state.wallet?.address,live:state.session?.mode==='live'&&executionRequested(),blocked:state.orders.some(o=>o.kind==='route'?o.blocksNewOrders===true:['SUBMITTING','UNKNOWN','BROADCASTED','PENDING_CONFIRMATION','MINED'].includes(o.status))}),getBusy:()=>state.previewBusy||state.executeBusy,onBusy:value=>{state.executeBusy=value;tradePreparation?.cancel();renderControls();},onResult:async result=>{if(result.order)acceptDirectOrder(result.order);await loadOrders();void loadWallet(true).catch(()=>{});}});
   const tradePreparation=window.createTradePreparation?.({
     api,getOwner:()=>`${accountEpoch}:${state.session?.account?.id||'local'}:${state.wallet?.address||''}`,getInput:tradeInput,
     canPrepare:()=>Boolean(state.session?.capabilities?.tradePreparation&&!state.previewBusy&&!state.executeBusy&&!state.preview&&!$('trade-drawer').hidden&&document.visibilityState!=='hidden'&&navigator.onLine!==false&&canTrade(selectedToken())&&walletReadiness().ready&&!state.tokenError&&!inputError()),
@@ -96,7 +97,7 @@
     clientOrders.clear();$('order-refresh-metrics').hidden=true;
     orderObserver?.stop();tradeNotices?.clear();clearTimeout(walletRetryTimer);walletRetryAttempt=0;
     tradePreparation?.cancel();
-    accountEpoch++; approvalsView?.clear();rpcSettingsView?.clear();portfolio?.clear();profileView?.clear();
+    accountEpoch++; approvalsView?.clear();rpcSettingsView?.clear();conversionView?.clear();portfolio?.clear();profileView?.clear();
     state.activeIntent=null;state.previewBusy=false;state.executeBusy=false;
     state.timers.forEach(timer => { clearTimeout(timer); clearInterval(timer); }); state.timers.clear();
     window.walletTracker?.stop(); tokenDetail.close();
@@ -850,6 +851,7 @@
   }
 
   function renderControls() {
+    conversionView?.update();
     const busy = state.previewBusy || state.executeBusy;
     const unresolvedExecution=state.session?.liveExecution===null&&!executionRequested()||state.session?.executionRollout?.stopRequired||state.session?.executionRollout?.repairRequired||state.session?.liveExecution===true&&(state.session?.liveExecutionAllowed===false||state.session?.capabilities?.liveExecutionAllowed===false);
     routeView.update({token:selectedToken()||state.selectedSnapshot,side:state.side,enabled:state.session?.capabilities?.bnbRoutes===true,busy});
@@ -1184,6 +1186,7 @@
   }
 
   function renderWallet() {
+    conversionView?.update();
     approvalsView?.update();
     rpcSettingsView?.update();
     orderObserver?.update();
@@ -1228,12 +1231,12 @@
     const fragment = document.createDocumentFragment();
     state.orders.forEach((order) => {
       const row = node('div', 'order-row');
-      const side = order.kind === 'wrap' ? '包装' : order.kind === 'approve' || order.side === 'approve' ? '授权' : order.side === 'sell' ? '卖出' : order.side === 'buy' ? '买入' : display(order.side, '交易');
+      const side = order.route?.kind==='asset-conversion'?'兑换':order.kind === 'wrap' ? '包装' : order.kind === 'approve' || order.side === 'approve' ? '授权' : order.side === 'sell' ? '卖出' : order.side === 'buy' ? '买入' : display(order.side, '交易');
       const sideLabel = node('span', `order-side${order.side === 'sell' ? ' sell' : ''}`, side);
       const body = node('div');
       const token = typeof order.token === 'object' && order.token ? order.token.address || order.token.symbol || display(order.token) : display(order.token);
       const title = node('div', 'order-title');
-      title.append(node('strong', 'mono', display(order.amount)), node('span', 'quiet small', `${order.side === 'buy' ? order.quoteSymbol || 'BNB' : order.positionKind === 'shares' ? '份额' : '代币'} · ${platforms[order.platformId || 'four']?.name || '未知平台'}`));
+      title.append(node('strong', 'mono', display(order.amount)), node('span', 'quiet small',order.route?.kind==='asset-conversion'?`${order.route.summary.symbol} → BNB`:`${order.side === 'buy' ? order.quoteSymbol || 'BNB' : order.positionKind === 'shares' ? '份额' : '代币'} · ${platforms[order.platformId || 'four']?.name || '未知平台'}`));
       body.append(title, node('div', 'order-meta', token));
       if(order.kind==='route')body.append(routeView.renderOrder(order));
       if (order.txHash && /^0x[0-9a-fA-F]{64}$/.test(order.txHash)) {
@@ -1253,7 +1256,9 @@
       const client=clientOrders.get(order.id);
       if(client)body.append(node('p','order-meta',`页面${order.demo?'模拟':''}提交响应 ${(client.responseMs/1000).toFixed(2)} 秒${Number.isFinite(client.firstHashUiMs)?` · 确认点击至获哈希 ${(client.firstHashUiMs/1000).toFixed(2)} 秒`:''}${Number.isFinite(client.firstReceiptUiMs)?` · 确认点击至页面观察成功回执 ${(client.firstReceiptUiMs/1000).toFixed(2)} 秒`:''}`));
       const wait = node('p', 'order-meta'); wait.dataset.orderWait = String(order.id); body.append(wait);
-      if (!order.txHash && ['UNKNOWN', 'PENDING_CONFIRMATION'].includes(order.status)) body.append(orderRecovery(order));
+      if(order.kind==='route'){
+        if(['UNKNOWN','ROUTE_PAUSED','PENDING_CONFIRMATION'].includes(order.status)&&order.steps?.some(s=>['UNKNOWN','MARKET_PENDING','BROADCASTED','MINED'].includes(s.status)))body.append(routeRecovery(order));
+      }else if (!order.txHash && ['UNKNOWN', 'PENDING_CONFIRMATION'].includes(order.status)) body.append(orderRecovery(order));
       const meta = node('div');
       const failed = ['failed', 'error', 'rejected', 'FAILED', 'REVERTED'].includes(order.status);
       const confirmed = ['confirmed', 'success', 'simulated', 'demo', 'approved', 'DEMO_COMPLETED', 'SUCCESS', 'CONFIRMED'].includes(order.status);
@@ -1281,6 +1286,22 @@
       else if (order.status === 'UNKNOWN') text = '提交结果未知 · 核对前请勿重复下单';
       element.textContent = text; element.hidden = !text;
     });
+  }
+
+  function routeRecovery(order) {
+    const box=node('div','order-recovery');
+    box.append(node('p','field-help','分步路线按原聚合订单号核对币种、数量、滑点和链上回执；只更新记录，不重发或自动继续买卖。'));
+    const button=node('button','button subtle compact','核对分步路线（不重发）');button.type='button';
+    const message=node('p','inline-error');message.hidden=true;
+    button.disabled=!order.steps?.some(s=>s.kind==='market'&&s.orderId&&['UNKNOWN','MARKET_PENDING','BROADCASTED','MINED'].includes(s.status));
+    if(button.disabled){message.textContent='尚无可查询的聚合订单号，请先核对 Binance 钱包交易历史；此路线不使用单笔关联或释放入口。';message.hidden=false;}
+    button.addEventListener('click',async()=>{
+      if(button.disabled)return;const epoch=accountEpoch;button.disabled=true;button.textContent='正在只读核对…';message.hidden=true;
+      try{const result=await api('/api/orders/reconcile-route',{orderId:order.id});if(epoch!==accountEpoch)return;if(result.readOnly!==true)throw Error('未收到只读核对结果');showToast('核对完成，请查看每步状态及留存资产；未重新发送交易。');await loadOrders();}
+      catch(error){if(epoch===accountEpoch){message.textContent=error.message;message.hidden=false;}}
+      finally{if(epoch===accountEpoch){button.disabled=false;button.textContent='核对分步路线（不重发）';state.ordersSignature=null;}}
+    });
+    box.append(button,message);return box;
   }
 
   function orderRecovery(order) {

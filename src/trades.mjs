@@ -472,6 +472,33 @@ export function createTradeService({ protocol, baw, liveExecution = false, demo 
     } finally { executing = false; }
   }
 
+  async function convert(input={}){
+    if(Object.keys(input).some(k=>!['asset','amount','slippageBps','intentId','expectedWallet'].includes(k))||!protocol.planAssetConversion||!protocol.conversionToken)throw Error('兑换参数无效或当前服务不支持');
+    const token=protocol.conversionToken(input.asset);validateInput({token,side:'sell',amount:input.amount,slippageBps:input.slippageBps});
+    const {intentId,expectedWallet}=input;if(typeof intentId!=='string'||!/^[a-zA-Z0-9_-]{16,80}$/.test(intentId)||!isAddress(expectedWallet||''))throw Error('兑换意图或钱包地址无效');
+    const key=JSON.stringify(['asset-conversion',input.asset,input.amount,input.slippageBps]),prior=intents.get(intentId),durable=orders.find(o=>o.intentId===intentId);
+    if(prior||durable){
+      if((prior?.key??durable.intentKey)!==key)throw Error('兑换意图已绑定其他参数');const wallet=await walletContext();if(!wallet.address||wallet.address.toLowerCase()!==expectedWallet.toLowerCase()||durable&&wallet.address.toLowerCase()!==durable.walletAddress?.toLowerCase()||prior?.wallet&&wallet.address.toLowerCase()!==prior.wallet)throw Error('兑换意图已绑定其他钱包');
+      if(prior)return publicCopy(await prior.promise);return{intentId,submitted:durable.steps.some(s=>s.submissionAttempted),walletAddress:wallet.address,order:publicCopy(durable)};
+    }
+    assertExecutionEnabled(executionVersion);if(demo||placing||executing||refreshing||preparing||activeProgress||routeOrders.isBusy()||orders.some(blocksOrder))throw Error('存在处理中或未知订单，请先核对后兑换');
+    for(const[id,item]of intents)if(item.done&&now()-item.createdAt>300000)intents.delete(id);if(intents.size>=200)throw Error('下单记录已满，请稍后再试');
+    const entry={key,version:executionVersion,createdAt:now(),done:false,wallet:null};placing=intentId;intents.set(intentId,entry);
+    entry.promise=Promise.resolve().then(async()=>{
+      const wallet=await walletContext();if(!wallet.available||wallet.address?.toLowerCase()!==expectedWallet.toLowerCase())throw Error('当前钱包与兑换请求不一致');entry.wallet=wallet.address.toLowerCase();assertExecutionEnabled(entry.version);
+      const plan=await protocol.planAssetConversion({asset:input.asset,amount:input.amount,slippageBps:input.slippageBps,walletAddress:wallet.address});assertExecutionEnabled(entry.version);
+      return routeOrders.start(plan,{intentId,intentKey:key,executionVersion:entry.version});
+    }).finally(()=>{entry.done=true;if(placing===intentId)placing=null;});
+    return publicCopy(await entry.promise);
+  }
+  async function reconcileRoute(input={}){
+    if(Object.keys(input).some(k=>k!=='orderId')||typeof input.orderId!=='string')throw Error('路线核对参数无效');
+    const order=orders.find(o=>o.id===input.orderId&&o.kind==='route');
+    if(!order)throw Error('未找到本钱包的分步路线');
+    if(executing||refreshing||placing||preparing||routeOrders.isBusy()||order.status==='ROUTE_RUNNING')throw Error('路线或钱包正在处理，请稍后核对');
+    refreshing=true;
+    try{const result=await routeOrders.refresh({reconcileOrderId:order.id});return{readOnly:true,...result,order:publicCopy(order)};}finally{refreshing=false;}
+  }
   async function refresh() {
     if (!protocol.provider || demo || refreshing || executing || routeOrders.isBusy()) return { pending: receiptOrders.size, errors: 0 };
     refreshing = true;
@@ -566,5 +593,5 @@ export function createTradeService({ protocol, baw, liveExecution = false, demo 
     for (const path of [journalPath, dirname(journalPath)]) { const fd = openSync(path, 'r'); try { fsyncSync(fd); } finally { closeSync(fd); } }
   }
   function invalidateQuotes(){preparationVersion++;prepared=null;previews.clear();}
-  return { invalidateQuotes,approvalSettings,setApprovalSettings,revokePreapproval,prepare, preview, execute, place, linkTransaction, releaseOrder, refresh, progress, setLiveExecution, isLiveExecution, lifecycle, checkpoint, receiptPending: () => receiptOrders.size + routeOrders.pendingCount(), watchReceipts(fn) { receiptListeners.add(fn); return () => receiptListeners.delete(fn); }, list: () => publicCopy(orders) };
+  return { convert,reconcileRoute,invalidateQuotes,approvalSettings,setApprovalSettings,revokePreapproval,prepare, preview, execute, place, linkTransaction, releaseOrder, refresh, progress, setLiveExecution, isLiveExecution, lifecycle, checkpoint, receiptPending: () => receiptOrders.size + routeOrders.pendingCount(), watchReceipts(fn) { receiptListeners.add(fn); return () => receiptListeners.delete(fn); }, list: () => publicCopy(orders) };
 }

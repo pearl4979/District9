@@ -28,6 +28,7 @@ import { createSnapshotStream } from './snapshot-stream.mjs';
 import { createIndexedTracking } from './indexed-tracking.mjs';
 import { createWorkerLifecycle } from './worker-lifecycle.mjs';
 import { createRpcSettings } from './rpc-settings.mjs';
+import { createAssetConversionProtocol } from './asset-conversion.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // Exact branding asset allowlist; no general filesystem or upload route.
@@ -42,6 +43,7 @@ assets['/trade-approvals.js']=['trade-approvals.js','text/javascript'];
 assets['/trade-route.js'] = ['trade-route.js', 'text/javascript'];
 assets['/live-updates.js'] = ['live-updates.js', 'text/javascript'];
 assets['/rpc-settings.js'] = ['rpc-settings.js', 'text/javascript'];
+assets['/asset-conversion.js'] = ['asset-conversion.js', 'text/javascript'];
 
 export function createHttpServer({ monitor, baw, trades, protocol, metadata, charts, insights, fairParticipants, tracking, binanceFeed, portfolioLedger, rpcSettings, demo = false, liveExecution = false, liveExecutionAllowed = true, receiptPollMs = 750, lifecycleCapability, lifecycleFlush, redactRpcUrls=[] }) {
   const csrf = randomBytes(32).toString('hex');
@@ -116,7 +118,7 @@ export function createHttpServer({ monitor, baw, trades, protocol, metadata, cha
     try {
       const url = new URL(req.url, 'http://localhost');
       const path = url.pathname;
-      if(rpcSettings&&['/api/wallet','/api/portfolio','/api/positions','/api/order','/api/preview','/api/execute','/api/trade-prepare','/api/approvals/revoke'].includes(path))releaseRpc=rpcSettings.beginOperation();
+      if(rpcSettings&&['/api/wallet','/api/portfolio','/api/positions','/api/order','/api/preview','/api/execute','/api/trade-prepare','/api/approvals/revoke','/api/orders/reconcile-route','/api/conversion','/api/conversion/balances'].includes(path))releaseRpc=rpcSettings.beginOperation();
       if (lifecycle && (req.method === 'POST' || ['/api/wallet', '/api/portfolio', '/api/positions'].includes(path))) releaseLifecycle = lifecycle.begin();
       if (req.method === 'GET') {
         if(['/api/market-stream','/api/tracking-stream'].includes(path)){
@@ -127,6 +129,7 @@ export function createHttpServer({ monitor, baw, trades, protocol, metadata, cha
         }
         if (path === '/api/health') return send(200, { status: 'ok', service: 'worker' });
         if(path==='/api/settings/rpc')return send(200,rpcSettings?.snapshot()??{mode:'default',configured:false,message:'当前服务未开放个人 RPC 设置'});
+        if(path==='/api/conversion/balances'){if(!protocol.conversionBalances)return send(503,{error:'兑换服务暂不可用'});const owner=await wallet();if(!owner.address)return send(400,{error:'请先连接钱包'});return send(200,await protocol.conversionBalances(owner.address));}
         if(path==='/api/profile')return send(200,await ownProfile());
         if(path==='/api/profiles'){for(const k of url.searchParams.keys())if(k!=='wallet'||url.searchParams.getAll(k).length!==1)return send(400,{error:'档案查询参数无效'});const address=url.searchParams.get('wallet');if(address&&!/^0x[0-9a-f]{40}$/i.test(address))return send(400,{error:'钱包地址无效'});const rows=demo&&demoPublished?[await demoProfile()]:[];return send(200,address?{profile:rows.find(p=>p.walletAddress===address.toLowerCase())||null}:{profiles:rows,complete:true});}
         if (path === '/api/session') return send(200, { csrf, mode: demo ? 'demo' : 'live', liveExecution: executionEnabled(), liveExecutionAllowed, capabilities: { directOrders: typeof trades.place === 'function', tradePreparation: typeof trades.prepare === 'function', bnbRoutes: typeof protocol.planRoute === 'function', aggregator:protocol.aggregatorEnabled===true, preapproval:typeof trades.setApprovalSettings==='function' }, platforms: Object.values(PLATFORMS), mev: { status: 'unverified', label: '防夹未验证', description: '当前 baw contract-call 广播通道未披露 MEV 保护；滑点与重新估价不等于防夹。' } });
@@ -253,6 +256,8 @@ export function createHttpServer({ monitor, baw, trades, protocol, metadata, cha
         const result = await trades.execute(await readJson(req)); invalidateWallet(); return send(200, result);
       }
       if (req.method === 'POST' && path === '/api/orders/link') return send(200, await trades.linkTransaction(await readJson(req)));
+      if(req.method==='POST'&&path==='/api/conversion'){if(!liveExecutionAllowed)return send(403,{error:'此部署已禁用实盘执行'});const result=await trades.convert(await readJson(req));invalidateWallet();return send(200,result);}
+      if (req.method === 'POST' && path === '/api/orders/reconcile-route') { const result=await trades.reconcileRoute(await readJson(req));invalidateWallet();return send(200,result); }
       if (req.method === 'POST' && path === '/api/orders/release') return send(200, await trades.releaseOrder(await readJson(req)));
       return send(404, { error: '接口不存在' });
     } catch (e) { send(e.code==='RPC_BUSY'?409:e.code === 'WORKER_QUIESCING' || e.code === 'WORKER_OPERATION_BUSY' ? 503 : 400, { error: e.message, ...(e.cliError ? { cliError: e.cliError } : {}),...(e.tradeRisk?{tradeRisk:e.tradeRisk}:{}),...(e.timings?{timings:e.timings}:{}) }); }
@@ -345,7 +350,7 @@ export async function main() {
     deps.charts = createCandleService({ snapshot: readOnlySnapshot, cachePath: resolve(root, '.runtime', 'chart-samples-v1.json') });
     await deps.charts.restore();
   }
-  if(!demo)deps.protocol=createAutomaticSetupProtocol({protocol:deps.protocol});
+  if(!demo)deps.protocol=createAssetConversionProtocol({protocol:createAutomaticSetupProtocol({protocol:deps.protocol}),baw:deps.baw});
   const trades = createTradeService({ ...deps, demo, liveExecution, warmPreviews:!demo, ...(!demo&&process.env.DISTRICT9_WALLET_ADDRESS?{trustedWalletAddress:process.env.DISTRICT9_WALLET_ADDRESS}:{}), journalPath: resolve(root, '.runtime', demo ? 'orders-demo.json' : 'orders.json') });
   const rpcSettings=createRpcSettings({storagePath:resolve(root,'.runtime',demo?'rpc-demo.json':'rpc-settings.json'),isBusy:()=>{const state=trades.lifecycle();return state.busy||state.pending;}});
   await rpcSettings.ready;if(!demo)rpcSettings.attach(deps.protocol.provider);
