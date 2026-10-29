@@ -2,6 +2,8 @@
 
 本地运行的 BSC 交易终端，聚合 Gang.fun、Flap.sh 和 Four.meme Agent 代币。使用 Binance Agentic Wallet 官方 `baw` CLI 连接钱包、签名并执行；交易路径没有 LLM。
 
+![District9 产品界面：实时钱包信号与三栏代币战壕](docs/images/district9-terminal.png)
+
 此仓库只包含本地版。公网账号网关、容器部署、服务器配置、维护记录、私人钱包数据及原项目 Git 历史均未包含。
 
 ## 运行
